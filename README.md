@@ -8,3 +8,9 @@ There are several reasons to investigate the weather change in Calgary vs. Edmon
 - To investigate if Calgary and Edmonton have similar weather. Since the two cities are geograph- ically closed to each other, it is likely that there is the belief that they are theoretically quite correlated in terms of weather. As such, the strength of this association will be explored to see if data in one location can be used to to predict the other. This leads us to the third question we want to answer: How do Calgary and Edmonton’s weather compare?  
 - To investigate the questions above, the populations analyzed will be the temperature and precipitation in Calgary and Edmonton over the past 30 years. The parameters to be investigated related to these questions are the true mean, max, and min of temperature and precipitation for each city. It is important to note that the data set contains mean temperatures over a 24 hour period. Although some days can reach temperatures of -30 degrees or +30 degrees, it is rare that the entire 24 hour period would experience such temperatures. The report will consider days with a mean temperature of >20 degrees and <-20 degrees as hot and cold days, respectively.
 
+### Statistical Analysis:
+#### To gain an understanding of the data, the following visualizations were created:
+- Box plot to show the spread of each city’s temperature and precipitation • Scatter plot to explore nature of the relationship between variables
+- Histogram to show underlying distribution
+- Barplot to show the values in the categorical variable
+- 
