@@ -30,8 +30,8 @@ one population mean)
 - Simple linear regression to determine if there is a correlation between each city’s mean temperature • Pairwise plot to show temperature association between cities
 - qqplot to check normality assumption for linear regression model
 - Hypothesis testing:
-  – To determine which city will have a colder winter or warmer summer (two-sample mean test (mean_coldest_calgary - mean_coldest_edmonton) or (mean_hottest_calgary - mean_hottest_edmonton) )
-  – To determine which city has a higher proportion of days above 0 degrees (two sample population p1-p2 test)
-  – To determine if there is a difference between each city’s mean temperature (estimation of two population difference (mean_calgary - mean_edmonton))
-  – To determine if each city’s variance in precipitation and temperature is equal (test of equal variances)
+  * To determine which city will have a colder winter or warmer summer (two-sample mean test (mean_coldest_calgary - mean_coldest_edmonton) or (mean_hottest_calgary - mean_hottest_edmonton) )
+  * To determine which city has a higher proportion of days above 0 degrees (two sample population p1-p2 test)
+  * To determine if there is a difference between each city’s mean temperature (estimation of two population difference (mean_calgary - mean_edmonton))
+  * To determine if each city’s variance in precipitation and temperature is equal (test of equal variances)
 
