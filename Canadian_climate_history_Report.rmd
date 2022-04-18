@@ -1,0 +1,954 @@
+---
+title: "Calgary & Edmonton Weather Comparison"
+subtitle: 'DATA 602 Final Project'
+date: '`r format(Sys.time(), '%Y-%m-%d')`'
+output:
+  pdf_document:
+    extra_dependencies:
+    - bbm
+    - xcolor
+    toc: yes
+  html_document:
+    toc: yes
+    df_print: paged
+geometry: margin=3cm
+header-includes: \usepackage{fvextra} \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T)
+knitr::opts_chunk$set(fig.width=6, fig.height=3) 
+#Load all the packages we need for this project
+library(dplyr) #for tibble
+library(boot) #for bootstrap
+library(magrittr) #for %>% operator
+library(tidyr) #required for reshape
+library(reshape2) #transform dataframe
+library(ggplot2) #for pretty plot
+library(corrplot) #not used
+library(psych) #for correlation
+library(hydroTSM) #from dates to season
+library(purrr)#for using discard. compatible with magrittr operator
+library(tidyverse) #for connecting dplyr and tidyr
+```
+
+
+# Data Collection:
+
+- The data set (**Eighty years of Candian climate data**) was obtained from [*Kaggle*](https://www.kaggle.com/aturner374/eighty-years-of-canadian-climate-data). This dataset is licensed under the Creative Commons License and was compiled from public sources, mainly from the [*Government of Canada*](https://climate-change.canada.ca/climate-data/#/daily-climate-data). The whole data set consists of daily temperatures and precipitation from 13 Canadian centers from 1940 to 2020. It is 1 file in csv format with 29k rows of 27 columns. Precipitation is either rain or snow (likely snow in winter months). 
+- Note: snow is likely recorded as its water equivalent in the data set. For simplicity and since no further detailed information is available, we suggest considering  1 cm of snow as equivalent to about 1 mm of water. (Government of Canada, 2018)
+- The final data set was patched together because only a few of Canada's weather stations have been operating continuously.
+- This report will focus on Alberta weather over the last 30 years - mainly Calgary and Edmonton. Records that were "NA" were removed from these cities to tidy the data set. The last 30 years was chosen as the time frame for the analysis so it could be focused on more recent data.
+- The daily records are grouped into 4 different seasons, i.e.: "winter", "spring", "summer", and "autumn" to aid with comparisons.
+- See the "Section I: Data Collection and Transformation" section for more information.
+
+
+# Purpose/Motivation:
+
+There are several reasons to investigate the weather change in Calgary vs. Edmonton:
+
+
+- To determine if Alberta's local environment is trending the same way as the global warming over the past 30 years. Earth’s temperature has risen by 0.08° C per decade since 1880 (Lindsey, R and Dahlman, L., 2021). Global warming is a serious threat that will cause things such as a rise in warm temperature extremes, an increase in heatwaves occurring more naturally, risks of floods and droughts (depending on the location), negative impacts on biodiversity and ecosystems, and less food availability (Buis, A. (2019)). This leads us to the first question we want to answer: **Is Alberta's local weather trending the same way as the global warming over the past 30 years?**
+
+
+- To investigate Calgary's local weather patterns. For example, this information can be used to provide educated advice (like travel tips, what to pack, what to expect) for different seasons in Calgary. This leads us to the second question we want to answer: **What are Calgary's local weather patterns like? What advice would be suggested to travelers coming to Calgary for each season? **
+
+
+- To investigate if Calgary and Edmonton have similar weather. Since the two cities are geographically closed to each other, it is likely that there is the belief that they are theoretically quite correlated in terms of weather. As such, the strength of this association will be explored to see if data in one location can be used to to predict the other. This leads us to the third question we want to answer: **How do Calgary and Edmonton's weather compare?**
+
+
+To investigate the questions above, the populations analyzed will be the temperature and precipitation in Calgary and Edmonton over the past 30 years. The parameters to be investigated related to these questions are the true mean, max, and min of temperature and precipitation for each city. It is important to note that the data set contains mean temperatures over a 24 hour period. Although some days can reach temperatures of -30 degrees or +30 degrees, it is rare that the entire 24 hour period would experience such temperatures. The report will consider days with a mean temperature of >20 degrees and <-20 degrees as hot and cold days, respectively. 
+
+
+# Statistical Analysis:
+
+
+**To gain an understanding of the data, the following visualizations were created:**
+
+
+_See Section I for more in-depth explanation._
+
+- Box plot to show the spread of each city's temperature and precipitation 
+- Scatter plot to explore nature of the relationship between variables
+- Histogram to show underlying distribution
+- Barplot to show the values in the categorical variable 
+
+
+**To answer Question 1, the following visualizations and statistical methods were used:**
+
+
+_See Section II for more in-depth calculations and explanation._
+
+- Calculated table and scatter plot difference to show the the temperature/precipitation change overtime
+- Linear Regression Model for Calgary & Edmonton temperature change over time  
+
+
+**To answer Question 2, the following visualizations and statistical methods were used:**
+
+
+_See Section III for more in-depth calculations and explanation._
+
+
+- 95% confidence interval for Calgary's mean temperature and precipitation (estimation of one population mean)
+- 95% confidence interval for Calgary's mean precipitation (bootstrap)
+- Bar plot to compare the mean value of cities
+- P-value test for Calgary's true mean temperature in its hottest and coldest months (estimation of one population mean)
+- 95% confidence interval for mean number of days in a year that are below -20 degrees and above +20 degrees each year
+
+
+**To answer Question 3, the following visualizations and statistical methods were used:**
+
+
+_See Section IV for more in-depth calculations and explanation._
+
+
+- Line plots to show the min and max temperatures for each city during summer and winter
+- Simple linear regression to determine if there is a correlation between each city's mean temperature
+- Pairwise plot to show temperature association between cities
+- qqplot to check normality assumption for linear regression model
+- Hypothesis testing:
+    - To determine which city will have a colder winter or warmer summer (two-sample mean test (mean_coldest_calgary - mean_coldest_edmonton) or (mean_hottest_calgary - mean_hottest_edmonton) )
+    - To determine which city has a higher proportion of days above 0 degrees (two sample population p1-p2 test)
+    - To determine if there is a difference between each city's mean temperature (estimation of two population difference (mean_calgary - mean_edmonton))
+    - To determine if each city's variance in precipitation and temperature is equal (test of equal variances) 
+
+
+# Analysis Summary
+**Question 1: Is Alberta's local weather trending the same way as the global warming over the past 30 years?**
+
+
+_See Section II for more in-depth calculations and explanation._
+
+
+Creating a linear regression model for the mean annual temperature for each city reveals a negative slope for Edmonton and a positive slope for Calgary which represents each city's trend in mean temperature over the past 30 years. 
+
+
+```{r echo=FALSE}
+#first read in the Canadian_climate_history data file
+setwd("/Users/yongpengfu/OneDrive - University of Calgary/Master in Data Science and Analytics/Courses/DATA 602 L03 - (Fall 2021) - Statistical Data Analysis/Assignment/Project/DATA602_Project")
+Canadian_climate_history <- as_tibble(read.csv("Canadian_climate_history.csv", header = T))
+#convert LOCAL_DATE to Year-Month-Date
+Canadian_climate_history$LOCAL_DATE <- as.Date(Canadian_climate_history$LOCAL_DATE, format = "%d-%b-%Y")
+
+# group different months manually according to different seasons; this becomes a new season column
+Canadian_climate_history %<>% mutate(season = time2season(Canadian_climate_history$LOCAL_DATE, out.fmt = "seasons")) %>% mutate(season = replace(season, season == "autumm", "autumn"))
+
+#This is a tidy dataframe into long format for ggplot later on
+Canadian_climate_history_long <- Canadian_climate_history %>%  gather(City,Measure, -LOCAL_DATE, -season) %>% separate(City, into = c("Mean", "Variable", "CITY"), sep = "_") %>% unite("VARIABLE", Mean:Variable, remove = F) %>% dplyr::select(-c(Mean, Variable))
+
+#In order to get a more tangible conclusion, we are mainly looking at temperature or precipitation over the last 30 years.
+Canadian_climate_history_last30 <- Canadian_climate_history %>% filter(LOCAL_DATE >= "1991-01-01")
+Canadian_climate_history_long_last_30<- Canadian_climate_history_long %>% filter(LOCAL_DATE >= "1991-01-01")
+
+#get no na
+Canadian_climate_history_long_Cal_Edm_last_30_noNa <- Canadian_climate_history_long %>% filter(CITY == "CALGARY" | CITY == "EDMONTON", LOCAL_DATE >= "1991-01-01", !is.na(Measure))
+
+#How many cities recorded and retrieve their names
+all_citys <- sapply(strsplit(names(Canadian_climate_history[-1]), "_"), "[", 3)%>% discard(is.na)
+#choose "CALGARY" and "EDMONTON" for further analysis
+selected_city <- seq(2,length(names(Canadian_climate_history))-1)[all_citys %in% c("CALGARY", "EDMONTON")]
+Canadian_climate_history_last30_Cal_Edm <- Canadian_climate_history_last30[,c(1,selected_city, length(names(Canadian_climate_history)))]
+Canadian_climate_history_long_last_30_Cal_Edm <- Canadian_climate_history_long_last_30%>% filter(CITY == "CALGARY" | CITY == "EDMONTON") 
+
+
+mean_temp = Canadian_climate_history_long_last_30_Cal_Edm %>% filter(VARIABLE == "MEAN_TEMPERATURE") %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% group_by(CITY,year) %>% summarise(mean_tem = mean(Measure, na.rm = T))
+
+mean_temp_calg = mean_temp %>% filter(CITY == "CALGARY") %>% filter(year < 2020)
+mean_temp_edm = mean_temp %>% filter(CITY == "EDMONTON")%>% filter(year < 2020)
+
+calg_temp_fit = lm(mean_tem ~ year, data = mean_temp_calg)
+edm_temp_fit = lm(mean_tem ~ year, data = mean_temp_edm )
+#To show the summary of the linear regression.
+summary(calg_temp_fit)
+summary(edm_temp_fit)
+#divide the grid in one row and two columns for the scatter plot
+par(mfrow = c(1,1))
+#Calgary linear regression with equation
+plot(mean_tem ~ year, data = mean_temp_calg, main = "Calgary Mean Temp")
+abline(calg_temp_fit)
+text(2005, 3, expression(mean_temp == 0.02858 * year + -52.68009), cex = 0.6)
+#Edmonton linear regression with equation
+plot(mean_tem ~ year, data = mean_temp_edm, main = "Edmonton Mean Temp")
+abline(edm_temp_fit)
+text(2005, 1, expression(mean_temp == -0.01624 * year + 35.06267 ), cex = 0.6)
+```
+
+
+However, the model diagnostics reveal that the model is not a great fit so further analysis is completed to answer the question. A pure comparison between the mean temperature of 1991 vs 2019 reveals that the average temperature in each city has dropped. Looking at each season of the month reveals that Calgary has seen an increase in  temperature during the Autumn (0.3363 degrees C) and Spring (0.1328 degrees C) months, whereas Edmonton saw an increase in temperature in only Autumn (0.6297 degrees C). Both cities saw a drop in temperatures for the Autumn and Winter months. Looking at the trend over time, we can see that the mean temperature fluctuates throughout each season. However indeed, **summer shows an upward trend for both cities**. 
+
+
+
+**Question 2: What are Calgary's local weather patterns like?**
+
+
+_See Section III for more in-depth calculations and explanation._
+
+
+- The following 95% confidence intervals were calculated for mean temperature for Calgary:
+
+Season | Lower CI (deg C) | Upper CI (deg C)
+-------| -------- |---------
+Winter | -6.78 |  -6.14 
+Spring | 3.81  |  4.40 
+Autumn | 4.53 |  5.14
+Summer | 15.5 |  15.7 
+
+
+- The following 95% confidence intervals were calculated for mean precipitation for Calgary by season:
+
+Season | Lower CI (mm) | Upper CI (mm)
+-------| -------- |---------
+Winter | 0.3649 |  0.4558 
+Spring | 1.023  |  1.289 
+Autumn | 0.7030 |  0.9082
+Summer | 2.249  |  2.703 
+
+
+- Note: snow is likely recorded as its water equivalent in the data set. For simplicity and since no further detailed information is available, we suggest  considering  1 cm of snow as equivalent to about 1 mm of water. (Government of Canada, 2018)
+
+- Through the following bar chart, we can see that the month with the hottest mean temperature is July and the coldest mean temperature is January. 
+
+```{r echo = FALSE, fig.width=6, fig.height=4}
+calgary_last30_tem <- Canadian_climate_history_long_Cal_Edm_last_30_noNa %>% filter(VARIABLE == "MEAN_TEMPERATURE", CITY == "CALGARY")
+#What month is likely to be the hottest on average? What month is likely to be the coldest on average?
+calgary_last30_tem_mean_month <- calgary_last30_tem %>% mutate(Month = format(calgary_last30_tem$LOCAL_DATE, "%B")) %>% group_by(Month) %>% summarise(Mean_Tem_Month = mean(Measure))
+unique_month <- calgary_last30_tem %>% mutate(Month = format(calgary_last30_tem$LOCAL_DATE, "%B")) %>% dplyr::select(Month) %>% unique %>% mutate(Month_ID = 1:12) %>% column_to_rownames(var = "Month")
+#add the Month_ID to calgary_last30_tem_mean_month
+calgary_last30_tem_mean_month %<>% mutate(Month_ID = unique_month[calgary_last30_tem_mean_month$Month,]) %>% arrange(Month_ID)
+#plot out the mean temperature for each month from Calgary
+barplot(calgary_last30_tem_mean_month$Mean_Tem_Month, names.arg = calgary_last30_tem_mean_month$Month, col = rainbow(12), cex.names=0.9, ylab = "Mea Temperture Each Month Calgary")
+```
+
+
+- Through P-value and critical value testing, we are 95% confident that the true mean temperature for July (warmest month) in Calgary is higher than 17 degrees Celsius. We are also 95% confident that the true average temperature for January (coldest) is lower than -6 degrees Celsius.
+
+
+- For Calgary, we are 95% confident that the mean number of days below -20 degrees each year is between 4.6762 and 13.1859 and the mean number of days above 20 degrees each year is between 6.792 and 13.208.
+
+
+
+**Question 3: How do Calgary and Edmonton's weather compare?**
+
+
+_See Section IV for more in-depth calculations and explanation._
+
+
+By visualizing the data between the two cities, we are able to see that Edmonton had the coldest temperature (-31 degrees) in the winter and Calgary had the hottest temperature (22 degrees) in the summer. 
+
+```{r , message=FALSE, fig.width=7, fig.height=6, echo = FALSE}
+
+calgary_last30_tem <- Canadian_climate_history_long_Cal_Edm_last_30_noNa %>% filter(VARIABLE == "MEAN_TEMPERATURE", CITY == "CALGARY")
+calgary_last30_tem$season <- factor(calgary_last30_tem$season, levels = c("winter", "spring", "autumn","summer" ))
+edmonton_last30_tem <- Canadian_climate_history_long_Cal_Edm_last_30_noNa %>% filter(VARIABLE == "MEAN_TEMPERATURE", CITY == "EDMONTON")
+edmonton_last30_tem$season <- factor(edmonton_last30_tem$season, levels = c("winter", "spring", "autumn","summer" ))
+
+#This is the summary data entry for Calgary temperature
+calgary_last30_tem_min_max_mean_winter_summer = calgary_last30_tem %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY, Measure, year) %>% group_by(season,CITY, year) %>% summarise(lowest = min(Measure), highest = max(Measure)) %>% filter(season == "winter" | season == "summer")%>% filter(year < 2020)
+#This is the summary data entry for Edmonton temperature during winter time
+edmonton_last30_tem_min_max_mean_winter_summer = edmonton_last30_tem %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY, Measure, year) %>% group_by(season, CITY, year) %>% summarise(lowest = min(Measure), highest = max(Measure)) %>% filter(season == "winter" | season == "summer")%>% filter(year < 2020)
+#merge Calgary and Edmonton to create a long format data frame
+cal_edm_last30_tem_min_max_mean_winter_summer_long <- as_tibble(rbind(calgary_last30_tem_min_max_mean_winter_summer, edmonton_last30_tem_min_max_mean_winter_summer)) %>% gather(min_max, value, lowest, highest)
+
+# Plotting the graphs. We are looking at the highest lowest temperature in Calgary and Edmonton by plotting them face to face, for winter only
+ggplot(data = cal_edm_last30_tem_min_max_mean_winter_summer_long, aes(x = as.numeric(year),y = value, color = CITY)) + 
+  geom_point()+ geom_line()+ facet_grid(season~min_max,scales = "free_y")+
+  xlab("Year")+ylab("Temperature (*C)") + labs(title="Highest and Lowest Winter & Summer Temperature Change \nOver 30 Years for Calgary and Edmonton") + theme(panel.spacing = unit(2, "lines"))
+```
+
+
+Completing two sample population p1-p2 test test revealed that Calgary has a higher proportion of warmer days than Edmonton and it is likely that Calgary will have warmer summers and winters. Completing an F-test revealed that we are 95% confident that the true variance of Calgary's temperature or precipitation does not equal the true variance of Edmonton's temperature or precipitation. 
+
+
+The linear regression model shows temperature in Calgary and Edmonton has a very strong positive correlation. Almost 93% of the variability in Calgary temperature can be explained by Edmonton temperature. As such, we highly recommend using this linear regression $t\_{calgary} = 2.483489 + 0.848284*t\_{edmonton}$ to predict Calgary Temperature.
+
+
+
+# Conclusion:
+
+**Question 1: Is Alberta's local weather trending the same way as the global warming over the past 30 years?**
+
+
+Earth’s temperature has risen by 0.08° C per decade since 1880 (Lindsey, R and Dahlman, L., 2021), meaning that for our analysis, we expect an increase of approximately 0.24 degrees Celcius over the last 30 years. Based on our data visualizations, we only saw a positive trend for the temperature of Calgary when looking at the data at an annual level. Analyzing the data from a seasonal level reveals that Calgary saw an increase in its mean temperature in Autumn and Spring, while Edmonton saw an increase in only Autumn. The trend of increasing mean temperature can be seen for both cities in the Summer season.
+
+
+**Question 2: What are Calgary's local weather patterns like? What advice would be suggested to travelers coming to Calgary for each season? **
+
+Calgary has distinct weather patterns. Spring and Autumn are very alike and have mean temperature ranges between 3 to 5 degrees C. Summer is very pleasant with a mean temperature around 15 degrees C. Winter is cold has a mean temperature near -6 degrees C. Calgary is expected to have 4.6762 and 13.1859 days each year where the mean temperature is below -20 degrees C and 6.792 and 13.208 days where the temperature is above 20 degrees C. 
+
+Travelers in the winter should expect around 6 - 13 days of quite cold weather whereas travelers in the summer should expect around 4 to 13 days of quite hot weather. Travelers should also expect precipitation in any season.
+
+
+**Question 3: How do Calgary and Edmonton's weather compare?**
+
+
+Calgary and Edmonton's weather are similar and can be represented with the following linear model: $t_{calgary} = 2.483489 + 0.848284*t_{edmonton}$. It should be noted that Calgary has a higher proportion of warm days (including warmer summer and winters) compared to Edmonton. The variance in temperature and precipitation between the two cities differs as well. 
+
+
+# References: 
+
+
+Buis, A. (2019) NASA's Global Climate Change Website. NASA. [Online] Available at: https://climate.nasa.gov/news/2878/a-degree-of-concern-why-global-temperatures-matter/ (Accessed: 16 October 2021)
+
+
+Government of Canada. (2018) Weather tools: frequently asked questions. Government of Canada. [Online] Available at: https://www.canada.ca/en/environment-climate-change/services/weather-general-tools-resources/frequently-asked-questions.html (Accessed: 19 October 2021)
+
+
+Lindsey, R and Dahlman, L. (2021) Climate Change: Global Temperature. Climate.gov. [Online] Available at: https://www.climate.gov/news-features/understanding-climate/climate-change-global-temperature (Accessed 16 October 2021)
+
+
+Turner, A. (2019) Eighty years of Canadian climate data. Kaggle Datasets. [Online] Available at: https://www.kaggle.com/aturner374/eighty-years-of-canadian-climate-data (Accessed: 4 October 2021)
+
+
+Weather Spark. (2021) Climate and Average Weather Year Round in Calgary. Weather Spark. [Online] Available at: https://weatherspark.com/y/2349/Average-Weather-in-Calgary-Canada-Year-Round (Accessed: 4 October 2021)
+
+
+
+\pagebreak
+
+# SECTION I: Data Collection and Transformation
+- A column for seasons was added based on: spring runs from March 1 to May 31; summer runs from June 1 to August 31; fall (autumn) runs from September 1 to November 30; and winter runs from December 1 to February 28 (February 29 in a leap year).
+- In order to get a more tangible conclusion, temperature or precipitation over the last 30 years will be analyzed 
+- The data set was presented in two formats:
+  + wide format where each "CITY" sits in the heading
+  + long format where each "CITY" sits in one column, with DATE and SEASON acting as the combination ID
+  
+```{r DataSetLoad, message=FALSE, warning=FALSE}
+#first read in the Canadian_climate_history data file
+setwd("/Users/yongpengfu/OneDrive - University of Calgary/Master in Data Science and Analytics/Courses/DATA 602 L03 - (Fall 2021) - Statistical Data Analysis/Assignment/Project/DATA602_Project")
+Canadian_climate_history <- as_tibble(read.csv("Canadian_climate_history.csv", header = T))
+#convert LOCAL_DATE to Year-Month-Date
+Canadian_climate_history$LOCAL_DATE <- as.Date(Canadian_climate_history$LOCAL_DATE, format = "%d-%b-%Y")
+
+# group different months manually according to different seasons; this becomes a new season column
+Canadian_climate_history %<>% mutate(season = time2season(Canadian_climate_history$LOCAL_DATE, out.fmt = "seasons")) %>% mutate(season = replace(season, season == "autumm", "autumn"))
+
+#This is a tidy dataframe into long format for ggplot later on
+Canadian_climate_history_long <- Canadian_climate_history %>%  gather(City,Measure, -LOCAL_DATE, -season) %>% separate(City, into = c("Mean", "Variable", "CITY"), sep = "_") %>% unite("VARIABLE", Mean:Variable, remove = F) %>% dplyr::select(-c(Mean, Variable))
+
+#In order to get a more tangible conclusion, we are mainly looking at temperature or precipitation over the last 30 years.
+Canadian_climate_history_last30 <- Canadian_climate_history %>% filter(LOCAL_DATE >= "1991-01-01")
+Canadian_climate_history_long_last_30<- Canadian_climate_history_long %>% filter(LOCAL_DATE >= "1991-01-01")
+```
+
+- The analysis will focus on Alberta's weather - Calgary and Edmonton in particular, although the whole data set includes more cities across Canada. To tidy the data set, "NA" records were removed from each city.
+```{r Calgary_Edmonton}
+#How many cities recorded and retrieve their names
+all_citys <- sapply(strsplit(names(Canadian_climate_history[-1]), "_"), "[", 3)%>% discard(is.na)
+#choose "CALGARY" and "EDMONTON" for further analysis
+selected_city <- seq(2,length(names(Canadian_climate_history))-1)[all_citys %in% c("CALGARY", "EDMONTON")]
+Canadian_climate_history_last30_Cal_Edm <- Canadian_climate_history_last30[,c(1,selected_city, length(names(Canadian_climate_history)))]
+Canadian_climate_history_long_last_30_Cal_Edm <- Canadian_climate_history_long_last_30%>% filter(CITY == "CALGARY" | CITY == "EDMONTON") 
+#show the first few records for long-format dataset
+Canadian_climate_history_long_last_30_Cal_Edm %>% head(3)
+```
+# SECTION II: Question #1 Analysis (Is Alberta's local weather trending the same way as the global warming over the past 30 years?) 
+## Calgary and Edmonton Temperature & Precipitation Spread (Visualization: Boxplot)
+- We want to look at the spread of temperature and precipitation over the 2 cities.
+- We will use a boxplot to visualize the spread. This will provide some insight into data symmetry and skewness.
+```{r BoxPlots, fig.width=5, fig.height=3}
+#first lets take a look at the boxplot for Calgary Temperature and Precipitation
+boxplot(Measure~CITY*VARIABLE,data = Canadian_climate_history_long_last_30_Cal_Edm, col=c("gold", "green", "red", "blue"),
+        names = c("Cal_Tem", "Edm_Temp", "Cal_Prec", "Edm_Prec"))
+```
+
+From this boxplot, we can see that temperature for both Calgary and Edmonton are quite clustered together from 0 to 20 degrees, with Edmonton's mean temperature a little lower than Calgary's. There are outliers below the lower fence, indicating that there are some extreme cold temperatures. This is not a big surprise for Alberta during the winter. However, it does suggest that further separation into different seasons is needed to draw conclusions. On the other hand, precipitation has more outliers above the upper fence, indicating that the precipitation is highly skewed. These outliers will require extra caution when it comes to parametric testing.
+
+## Calgary & Edmonton's Distribution of Temperature and Precipitation (Visualization: Histogram)
+- A histogram of Temperature and Precipitation for Calgary and Edmonton will be plotted so that the underlying data distribution can be revealed.
+```{r Working Dataset}
+#Get the dataset for Calgary and Edmonton only for the last 30 years
+Canadian_climate_history_long_Cal_Edm_last_30_noNa <- Canadian_climate_history_long %>% filter(CITY == "CALGARY" | CITY == "EDMONTON", LOCAL_DATE >= "1991-01-01", !is.na(Measure))
+
+#Plot out the Histogram of Temperature and Precipitation Over 30 Years for Calgary and Edmonton
+ggplot(Canadian_climate_history_long_Cal_Edm_last_30_noNa, aes(x = Measure, color = CITY)) +
+  geom_histogram(fill = "white", binwidth = 1, aes(y=..density..))+
+  facet_wrap(~VARIABLE, scales = "free_y") + labs(title="Histogram of Temperature and Precipitation
+    Over 30 Years for Calgary and Edmonton")
+```
+The above plot clearly shows that temperature follows a normal distribution, while precipitation does not. This will be used as the foundation of the rest of the parametric analysis done in this report.
+
+## Calgary & Edmonton Temperature Change Over Time  (Statistical Method: Linear Regression)
+
+- We'll use a linear regression model to analyze the mean annual temperature for Calgary & Edmonton over the past 30 years. 
+```{r message=FALSE}
+mean_temp = Canadian_climate_history_long_last_30_Cal_Edm %>% filter(VARIABLE == "MEAN_TEMPERATURE") %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% group_by(CITY,year) %>% summarise(mean_tem = mean(Measure, na.rm = T))
+
+mean_temp_calg = mean_temp %>% filter(CITY == "CALGARY") %>% filter(year < 2020)
+mean_temp_edm = mean_temp %>% filter(CITY == "EDMONTON")%>% filter(year < 2020)
+
+calg_temp_fit = lm(mean_tem ~ year, data = mean_temp_calg)
+edm_temp_fit = lm(mean_tem ~ year, data = mean_temp_edm )
+#To show the summary of the linear regression.
+summary(calg_temp_fit)
+summary(edm_temp_fit)
+#divide the grid in one row and two columns for the scatter plot
+par(mfrow = c(1,2))
+#Calgary linear regression with equation
+plot(mean_tem ~ year, data = mean_temp_calg, main = "Calgary Mean Temp")
+abline(calg_temp_fit)
+text(2005, 3, expression(mean_temp == 0.02858 * year + -52.68009), cex = 0.6)
+#Edmonton linear regression with equation
+plot(mean_tem ~ year, data = mean_temp_edm, main = "Edmonton Mean Temp")
+abline(edm_temp_fit)
+text(2005, 1, expression(mean_temp == -0.01624 * year + 35.06267 ), cex = 0.6)
+```
+Based on the linear regression model created, we can see that the slopes for mean temperature of Calgary is positive and Edmonton is negative, indicating that there is a positive trend for Calgary and a negative trend for Edmonton in mean temperature. However, the R^2 value (0.07154 for Calgary and 0.02249 for Edmonton) for both models are quite low, indicating that these models are not a great fit. To look closely, we are looking at the following assumptions in the diagnostic plot.
+
+There are a few assumptions to be met during regression analysis as follows:  
+
+1. Linearity Assumption: Scatter plot of $y$ vs $x$ shows a straight line pattern.
+2. Independence Assumption: The error ${\epsilon_i}$ are mutually independent.
+3. Equal Variance Assumption: The variance of ${\epsilon_i}$ are (above) the same.
+4. Normality Assumption: The error ${\epsilon_i}$ are normally distributed.
+
+The first one Linearity Assumption, we tested this in the above scatter plot, and we see a wiggly point along years. As such, this assumption is absent.
+
+The rest of the 3 assumptions can be checked in the following visualization:
+```{r model diagnostics, fig.width=6, fig.height=4}
+#Diagnostic for Calgary
+par(mfrow = c(2,2))
+plot(calg_temp_fit)
+
+#Diagnostic for Edmonton
+par(mfrow = c(2,2))
+plot(edm_temp_fit)
+```
+
+For both diagostic plots, the Independence Assumption and Equal Variance Assumption are checked in the top left and bottom left plots. We see Independence Assumption is suspicious because the plotted points are not evenly distributed in the rectagular region. Equal Variance Assumption seems ok on the other hand.
+
+The top right plot checks the normality assumption, which seems ok because we see a straight line pattern, except departures at the lower tail. So this assumption is met. The bottom right plot checks for influential data points. We do see three points identified as influential points. However, since Linearity Assumption, Independence Assumption are not met, probably there is no much point to re-do the model fitting without the influential data points.
+
+As a conclusion, the diagnostic plots show that not all assumptions for linear regression are met. We will delve deeper into analyzing the trend over time by creating visualizations per season.
+
+
+## Calgary and Edmonton Temperature Spread by Season (Visualization: Boxplot) 
+- Let's take a look at the Temperature by Seasons boxplots.
+```{r BoxPlots_Temperature_by_Seasons}
+ggplot(Canadian_climate_history_long_last_30_Cal_Edm %>% filter(VARIABLE == "MEAN_TEMPERATURE")) + geom_boxplot(aes(x= CITY, y = Measure, color = CITY)) + facet_wrap(~season) + ylab("Temperature")
+```
+The above plot aligns with what was previously found that Calgary in general has higher temperature than Edmonton, especially during "autumn" and "winter". However, this is just based on visualization. Secrion #III and #IV will perform statistic test to accurately determine if they are significant or not.
+
+
+## Calgary & Edmonton Temperature Change Over Time (Visualization: Table and Scatterplot)
+Temperature change over the last 30 years for both cities will be focused on to determine if a trend that aligns with global warming is present. Precipitation will not be analyzed here as temperature is the more prevalent indicator of global warming. We'll determine the differences between 2019 and 1991 mean temperatures and create a scatterplot to analyze this.
+
+```{r scatter_plots, message=FALSE, warning=FALSE}
+# find diff in temp between 2019 and 1991 (not by season)
+mean_temp = Canadian_climate_history_long_last_30_Cal_Edm %>% filter(VARIABLE == "MEAN_TEMPERATURE") %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% group_by(CITY,year) %>% summarise(mean_tem = mean(Measure, na.rm = T))
+
+mean_temp_1991 = mean_temp %>% filter(year == "1991") 
+mean_temp_2019 = mean_temp  %>% filter(year == "2019")
+temp_diff = mean_temp_2019$mean_tem - mean_temp_1991$mean_tem
+temp_diff_matrix = matrix(c(temp_diff), nrow = 2)
+colnames(temp_diff_matrix) = c("Temp Difference")
+rownames(temp_diff_matrix) = c("Calgary", "Edmonton")
+print(temp_diff_matrix)
+
+# find diff in temp between 2019 and 1991 by season
+mean_temp_seasons = Canadian_climate_history_long_last_30_Cal_Edm %>% filter(VARIABLE == "MEAN_TEMPERATURE") %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% group_by(CITY,season,year) %>% summarise(mean_tem = mean(Measure, na.rm = T)) 
+
+mean_temp_1991_seasons = mean_temp_seasons %>% filter(year == "1991") 
+mean_temp_2019_seasons = mean_temp_seasons  %>% filter(year == "2019")
+temp_diff_seasons = mean_temp_2019_seasons$mean_tem - mean_temp_1991_seasons$mean_tem
+temp_diff_matrix_seasons = matrix(c(temp_diff_seasons), nrow = 4, ncol = 2)
+rownames(temp_diff_matrix_seasons) = c("Autumn", "Spring", "Summer", "Winter")
+colnames(temp_diff_matrix_seasons) = c("Calgary", "Edmonton")
+print(temp_diff_matrix_seasons)
+
+# find the trend, need to convert the categorical year to numeric year
+ggplot(Canadian_climate_history_long_last_30_Cal_Edm %>% filter(VARIABLE == "MEAN_TEMPERATURE") %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% filter(year < 2020)%>% group_by(CITY,season,year) %>% summarise(mean_tem = mean(Measure, na.rm = T)), aes(x = year, y = mean_tem, color = CITY)) +
+  geom_smooth()+ geom_point()+
+  xlab("")+
+  facet_wrap(~season, scales = "free_y") + labs(title="Mean Temperature Change 
+    Over 30 Years for Calgary and Edmonton")
+```
+
+Based on the differences between the mean temperature in each city in 1991 vs. 2019, we can see that temperatures have decreased between the two years. Based on the differences between the mean temperature in each season for each city in 1991 vs 2019, we can see that the differences between the two cities are quite similar. There has been an increase in the temperature observed in 1991 vs 2019 for Calgary during the Autumn and Spring months, whereas Edmonton saw an increase in temperature in only Autumn. Both cities saw a drop in temperatures for the Autumn and Winter months. However, taking the difference of the mean temperature between 1991 vs. 2019 does not give the full picture of the data. Trends of temperature change over time can be seen from the above scatter plots. Particularly for Calgary in the summer, there is an upward mean-year temperature over the past 30 years. This is concerning, but formal Linear Regression analysis will be performed to confirm this conclusion, as shown in the next section (Statistical Analysis).
+
+
+# SECTION III: Question #2 Analysis (What are Calgary's local weather patterns like?)
+## What mean temperature range do we expect for each season in Calgary? (Statistical method: 95% confidence interval)
+
+To answer this question, we will construct a 95% confidence interval for the mean temperature by seasons for Calgary.
+```{r Confidence Interval}
+#For Calculating the 95% confidence interval for the mean temperature by season for Calgary and Edmonton.
+calgary_last30_tem <- Canadian_climate_history_long_Cal_Edm_last_30_noNa %>% filter(VARIABLE == "MEAN_TEMPERATURE", CITY == "CALGARY")
+calgary_last30_tem$season <- factor(calgary_last30_tem$season, levels = c("winter", "spring", "autumn","summer" ))
+edmonton_last30_tem <- Canadian_climate_history_long_Cal_Edm_last_30_noNa %>% filter(VARIABLE == "MEAN_TEMPERATURE", CITY == "EDMONTON")
+edmonton_last30_tem$season <- factor(edmonton_last30_tem$season, levels = c("winter", "spring", "autumn","summer" ))
+
+#For Calculating the 95% confidence interval for the mean precipitation by season for Calgary and Edmonton.
+calgary_last30_perc <- Canadian_climate_history_long_Cal_Edm_last_30_noNa %>% filter(VARIABLE == "TOTAL_PRECIPITATION", CITY == "CALGARY")
+calgary_last30_perc$season <- factor(calgary_last30_perc$season, levels = c("winter", "spring", "autumn","summer" ))
+edmonton_last30_perc <- Canadian_climate_history_long_Cal_Edm_last_30_noNa %>% filter(VARIABLE == "TOTAL_PRECIPITATION", CITY == "EDMONTON")
+edmonton_last30_perc$season <- factor(edmonton_last30_perc$season, levels = c("winter", "spring", "autumn","summer" ))
+
+#Write a function for one-sample CI
+function_CI <- function(x_bar, za2, sd, n){
+  x_bar + (za2 * sd)/sqrt(n)}
+
+#We have the following parameters
+c_Tem_bar =  tapply(calgary_last30_tem$Measure, calgary_last30_tem$season, mean)
+alpha = 0.05
+za2 = qnorm(1-alpha/2)
+c_Tem_sd = tapply(calgary_last30_tem$Measure, calgary_last30_tem$season, sd)
+c_Tem_n = tapply(calgary_last30_tem$Measure, calgary_last30_tem$season, length)
+c_Tem_CI = list() #declare a place holder
+
+#Collect the lower and upper interval for 5% level for both Temperature and precipitation
+for (i in 1:4){
+  c_Tem_CI[[i]] <- c(function_CI(c_Tem_bar[i], -za2, c_Tem_sd[i],c_Tem_n[i]),function_CI(c_Tem_bar[i], za2, c_Tem_sd[i], c_Tem_n[i]))
+}
+```
+From the previous calculations, we are 95% confident that the true mean temperature of Calgary for different seasons are as follows:
+```{r Season_Tem_CI, echo=T}
+data.frame(Seasons_Mean_Temp = levels(calgary_last30_tem$season), t(sapply(c_Tem_CI,c))) %>% as_tibble %>% 
+  rename(Lower_CI = winter, Upper_CI = winter.1)
+```
+The results show that temperature has a narrow confidence interval for each season, indicating there is small variability between them.
+
+## What mean precipitation range do we expect for each season in Calgary? (Statistical method: 95% confidence interval)
+
+To answer this question, we will construct a 95% confidence interval for the mean precipitation by seasons for Calgary.
+
+```{r}
+#We won't use the standard way to calculate the CI because Precipitation does not follow normal distribution.
+Canadian_climate_history_long_Cal_Prec_last_30_noNa <- Canadian_climate_history_long %>% filter(CITY == "CALGARY" , LOCAL_DATE >= "1991-01-01", !is.na(Measure), VARIABLE == "TOTAL_PRECIPITATION")
+
+# define the function that will be used in the bootstrap function 
+calg_precip_stat = function(d,i){
+  d2 = d[i,]
+  return(mean(d2$Measure))}
+
+set.seed(2021)
+c_season <- c("winter", "spring", "autumn", "summer")
+for (i in 1:length(c_season)){
+  boot_data = boot(data = Canadian_climate_history_long_Cal_Prec_last_30_noNa %>% filter(season == c_season[i]), statistic = calg_precip_stat, R = 2000)
+ cat("\n", toupper(c_season[i]), "\n") #commented out to preserve report space
+ print(boot.ci(boot.out = boot_data, conf = 0.95, type = c("perc"))) #commented out to preserve report space 
+  } 
+```
+
+From the previous calculations, we are 95% confident that the true mean precipitation of Calgary for different seasons are as follows:
+
+Season | Lower CI | Upper CI
+-------| -------- |---------
+Winter | 0.3628 | 0.4541 
+Spring | 1.012 | 1.284 
+Autumn | 0.7044 |  0.9136
+Summer | 2.243 |  2.703
+
+
+The results show that precipitation has a narrow confidence interval for each season, indicating there is small variability between them.
+
+
+## What month is likely to be the hottest/coldest on average in Calgary? (Visualization: Barplot & Statistical method: Z-Test)
+Based on data from Weather Spark (2021), it was reported that the hottest and coldest month are July and January for Calgary as follows:
+- The hottest month of the year is July, with an average of 17°C.
+- The coldest month of the year is January, with an average -6°C.
+
+A barplot will be created to indicate which month is the warmest and coldest in Calgary
+```{r Barplot, fig.width=6, fig.height=4}
+#What month is likely to be the hottest on average? What month is likely to be the coldest on average?
+calgary_last30_tem_mean_month <- calgary_last30_tem %>% mutate(Month = format(calgary_last30_tem$LOCAL_DATE, "%B")) %>% group_by(Month) %>% summarise(Mean_Tem_Month = mean(Measure))
+unique_month <- calgary_last30_tem %>% mutate(Month = format(calgary_last30_tem$LOCAL_DATE, "%B")) %>% dplyr::select(Month) %>% unique %>% mutate(Month_ID = 1:12) %>% column_to_rownames(var = "Month")
+#add the Month_ID to calgary_last30_tem_mean_month
+calgary_last30_tem_mean_month %<>% mutate(Month_ID = unique_month[calgary_last30_tem_mean_month$Month,]) %>% arrange(Month_ID)
+#plot out the mean temperature for each month from Calgary
+barplot(calgary_last30_tem_mean_month$Mean_Tem_Month, names.arg = calgary_last30_tem_mean_month$Month, col = rainbow(12), cex.names=0.9, ylab = "Mea Temperture Each Month Calgary")
+```
+
+It can be seen that  **July** is likely to be the hottest month of the year on average, and **January** is likely to be the coldest month of the year on average.
+
+### Determine the mean temperature in Calgary's hottest month (July)
+The following is a sample test for the population mean using z-test for July to test the warm temperature in Calgary. It was reported that the hottest month of the year is July in Calgary, with an average of 17°C. We will hypothesize that the average is higher than that. The past 30 years of July Temperature for each day is selected. Because n>30, we can use the large-sample z-test to approximate the t-test.
+
+
+Null hypothesis (H0): u = 17 vs. Alternative Hypothesis (Ha): u > 17 at level $\alpha=0.05$ This is a large-sample right-tail normal test.
+
+
+```{r July}
+calgary_last30_tem_July <- calgary_last30_tem %>% mutate(Month = format(calgary_last30_tem$LOCAL_DATE, "%B")) %>% filter(Month == "July")
+calgary_last30_tem_July_measure <- calgary_last30_tem_July$Measure
+#Lets create the function to calculate z
+z_statistic <- function(x_bar, u, sd, n){
+  (x_bar - u)/(sd/sqrt(n))}
+#We have the following parameter:
+x_bar = mean(calgary_last30_tem_July_measure)
+u0 = 17
+sd = sd(calgary_last30_tem_July_measure)
+n = length(calgary_last30_tem_July_measure)
+alpha = 0.05
+#obtain the z-test statistic value
+z_cal <- z_statistic(x_bar, u0, sd, n)
+#Obtain the P-value for the calculated z value
+P_value <- 1- pnorm(z_cal)
+P_value
+```
+Since the P-value is 0.868 which is way larger than alpha = 0.05, we fail to reject H0 at the 5% level. As such we conclude that we are 95% confident that there is no evidence to show the true mean temperature for July is higher than 17°C.
+
+### Determine the mean temperature in Calgary's coldest month (January)
+
+The following is a sample test for population mean using z test for January to test the cold temperature in Calgary.It was reported that the coldest month of the year is January in Calgary, with an average of -6°C. We suspect that the average is lower than -6°C based on our experience in Calgary.The past 30 years of January Temperature data for each day is selected. This is a large-sample left-tail normal test. Because n>30, we can use the large-sample z-test to approximate the t-test.
+
+
+Null hypothesis (H0): u = -6 vs. Alternative Hypothesis (Ha): u $<$ -6 at level $\alpha=0.05$ 
+
+
+```{r January}
+calgary_last30_tem_January <- calgary_last30_tem %>% mutate(Month = format(calgary_last30_tem$LOCAL_DATE, "%B")) %>% filter(Month == "January")
+calgary_last30_tem_January_measure <- calgary_last30_tem_January$Measure
+#Lets create the function to calculate z
+z_statistic <- function(x_bar, u, sd, n){
+  (x_bar - u)/(sd/sqrt(n))
+}
+#We have the following parameter:
+x_bar = mean(calgary_last30_tem_January_measure)
+u0 = -6
+sd = sd(calgary_last30_tem_January_measure)
+n = length(calgary_last30_tem_January_measure)
+alpha = 0.05
+z_value = qnorm(alpha)
+#obtain the z-test statistic value
+z_cal <- z_statistic(x_bar, u0, sd, n)
+```
+Because the calculated z =  `r z_cal`, which is smaller than `r z_value`, so we reject H0 at 5% level. As such we conclude that we are 95% confident that the true average temperature for January in Calgary is indeed smaller than -6°C.
+
+
+## What is the mean number of days in a year for Calgary that are below -20 degrees each year? (Statstical Method: Confidence Interval)
+To answer this question we will find create a 95% confidence interval.
+```{r}
+daily_temp = Canadian_climate_history_long_last_30_Cal_Edm %>% filter(VARIABLE == "MEAN_TEMPERATURE") %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% group_by(CITY)
+calg_temp_below20 = daily_temp %>% filter(CITY == "CALGARY") %>% filter(Measure < -20) %>% group_by(year) %>% summarise(Count = length(Measure))
+
+calg_temp_below20_mean = mean(calg_temp_below20$Count)
+calg_temp_below20_sd = sd(calg_temp_below20$Count)
+calg_temp_below20_n = length(calg_temp_below20$Count)
+alpha = 0.05
+z = 1- qnorm(alpha/2)
+
+calg_temp_below20_lower = calg_temp_below20_mean- (z*(calg_temp_below20_sd)/sqrt(calg_temp_below20_n))
+calg_temp_below20_upper = calg_temp_below20_mean + (z*(calg_temp_below20_sd)/sqrt(calg_temp_below20_n))
+
+cat("We are 95% confident that the mean number of days below -20 degrees each year
+    is between", round(calg_temp_below20_lower,4), "and", round(calg_temp_below20_upper,4))
+```
+
+## What is the mean number of days in a year for Calgary that are above +20 degrees each year? (Statstical Method: Confidence Interval)
+To answer this question we will create a 95% confidence interval.
+```{r}
+daily_temp = Canadian_climate_history_long_last_30_Cal_Edm %>% filter(VARIABLE == "MEAN_TEMPERATURE") %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% group_by(CITY)
+calg_temp_above20 = daily_temp %>% filter(CITY == "CALGARY") %>% filter(Measure > 20) %>% group_by(year) %>% summarise(Count = length(Measure))
+
+calg_temp_above20_mean = mean(calg_temp_above20$Count)
+calg_temp_above20_sd = sd(calg_temp_above20$Count)
+calg_temp_above20_n = length(calg_temp_above20$Count)
+alpha = 0.05
+z = 1- qnorm(alpha/2)
+
+calg_temp_above20_lower = calg_temp_above20_mean- (z*(calg_temp_above20_sd)/sqrt(calg_temp_above20_n))
+calg_temp_above20_upper = calg_temp_above20_mean + (z*(calg_temp_above20_sd)/sqrt(calg_temp_above20_n))
+
+cat("We are 95% confident that the mean number of days above 
+20 degrees each year is between", round(calg_temp_above20_lower,4), "and", round(calg_temp_above20_upper,4))
+```
+
+# SECTION IV: Question #3 Analysis (How do Calgary and Edmonton's weather compare?)
+## Edmonton and Calgary Temperature and Precipitation Comparison (Visualization: Lineplot)
+First we want to compare the coldest and hottest temperature for each city. We want to find which city (Calgary or Edmonton) will have the coldest temperature and which one has the warmest temperature.
+```{r Winter_summer temperature for Cal and Edm, message=FALSE, fig.width=7, fig.height=6}
+#This is the summary data entry for Calgary temperature
+calgary_last30_tem_min_max_mean_winter_summer = calgary_last30_tem %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY, Measure, year) %>% group_by(season,CITY, year) %>% summarise(lowest = min(Measure), highest = max(Measure)) %>% filter(season == "winter" | season == "summer")%>% filter(year < 2020)
+#This is the summary data entry for Edmonton temperature during winter time
+edmonton_last30_tem_min_max_mean_winter_summer = edmonton_last30_tem %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY, Measure, year) %>% group_by(season, CITY, year) %>% summarise(lowest = min(Measure), highest = max(Measure)) %>% filter(season == "winter" | season == "summer")%>% filter(year < 2020)
+#merge Calgary and Edmonton to create a long format data frame
+cal_edm_last30_tem_min_max_mean_winter_summer_long <- as_tibble(rbind(calgary_last30_tem_min_max_mean_winter_summer, edmonton_last30_tem_min_max_mean_winter_summer)) %>% gather(min_max, value, lowest, highest)
+
+# Plotting the graphs. We are looking at the highest lowest temperature in Calgary and Edmonton by plotting them face to face, for winter only
+ggplot(data = cal_edm_last30_tem_min_max_mean_winter_summer_long, aes(x = as.numeric(year),y = value, color = CITY)) + 
+  geom_point()+ geom_line()+ facet_grid(season~min_max,scales = "free_y")+
+  xlab("Year")+ylab("Temperature (*C)") + labs(title="Highest and Lowest Winter & Summer Temperature Change \nOver 30 Years for Calgary and Edmonton") + theme(panel.spacing = unit(2, "lines"))
+```
+When looking at the plot above, we can clearly see that the winter season in Calgary on average has warmer temperatures when compared with Edmonton, especially when looking at the maximum temperatures recorded in the winter months. The summer months are less extreme but still point to a similar trend, Calgary being the warmer city in these two seasons. Then we want to compare the most and least total Precipitation for each city. We want to find which city (Calgary or Edmonton) will have the most snow in winter (or rain in summer) and which one has the least snow in winter (or rain in summer).
+
+```{r Winter_summer Precipitation for Cal and Edm, message=FALSE, fig.width=7, fig.height=6}
+#This is the summary data entry for Calgary precipitation
+calgary_last30_prec_min_max_mean_winter_summer = calgary_last30_perc %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY, Measure, year) %>% group_by(season,CITY, year) %>% summarise(least = min(Measure), most = max(Measure)) %>% filter(season == "winter" | season == "summer")%>% filter(year < 2020)
+#This is the summary data entry for Edmonton precipitaiton
+edmonton_last30_prec_min_max_mean_winter_summer = edmonton_last30_perc %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY, Measure, year) %>% group_by(season, CITY, year) %>% summarise(least = min(Measure), most = max(Measure)) %>% filter(season == "winter" | season == "summer")%>% filter(year < 2020)
+#merge Calgary and Edmonton to create a long format data frame
+cal_edm_last30_prec_min_max_mean_winter_summer_long <- as_tibble(rbind(calgary_last30_prec_min_max_mean_winter_summer, edmonton_last30_prec_min_max_mean_winter_summer)) %>% gather(min_max, value, least, most)
+
+# Plotting the graphs. We are looking at the highest lowest temperature in Calgary and Edmonton by plotting them face to face, for winter only
+ggplot(data = cal_edm_last30_prec_min_max_mean_winter_summer_long, aes(x = as.numeric(year),y = value, color = CITY)) + 
+  geom_point()+ geom_line()+ facet_grid(season~min_max, scales = "free_y")+
+  xlab("Year")+ylab("Precipitation (mm)") + labs(title="Least and Most Winter & Summer precipitation Change \nOver 30 Years for Calgary and Edmonton")  + theme(panel.spacing = unit(2, "lines"))
+```
+For precipitation unlike temperature the difference between Calgary and Edmonton varies year by year and the amount that falls per year does not indicate the amount that will fall the next year. One thing that can be pulled from this graph is that during the summer months, both Calgary and Edmonton experience over double the amount of precipitation than in the winter. 
+
+
+## Comparison between Min and Max Temperatures (Visualization: Table & Statistical method: Hypothesis testing two-sample mean test)
+We want to find out if Calgary has a similar coldest temperature in the winter compared to Edmonton and if Calgary has a similar warmest temperature in the summer compared to Edmonton.
+```{r message=FALSE}
+# Calculations of the avg mean, min and max temperatures.
+#Calgary
+calgary_last30_tem_min = calgary_last30_tem %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY, Measure, year) %>% group_by(season,CITY, year) %>% summarise(minimum = min(Measure)) %>% filter(year < 2020)
+
+calgary_last30_tem_max = calgary_last30_tem %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY,Measure, year) %>% group_by(season,CITY, year) %>% summarise(maximum = max(Measure)) %>% filter(year < 2020)
+
+calgary_last30_tem_mean  = calgary_last30_tem %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season,CITY, Measure, year) %>% group_by(season,CITY, year) %>% summarise(mid = mean(Measure))%>% filter(year < 2020)
+
+calg_winter_temp_min = as_tibble(calgary_last30_tem_min)  %>% filter(season == "winter")
+calg_winter_temp_max = as_tibble(calgary_last30_tem_max)  %>% filter(season == "winter")
+calg_winter_temp_mean = as_tibble(calgary_last30_tem_mean) %>% filter(season == "winter")
+calg_summer_temp_min = as_tibble(calgary_last30_tem_min)  %>% filter(season == "summer")
+calg_summer_temp_max = as_tibble(calgary_last30_tem_max)  %>% filter(season == "summer")
+calg_summer_temp_mean = as_tibble(calgary_last30_tem_mean) %>% filter(season == "summer")
+
+#Edmonton
+edmonton_last30_tem_min = edmonton_last30_tem %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY, Measure, year) %>% group_by(season, CITY, year) %>% summarise(minimum = min(Measure)) %>% filter(year < 2020)
+
+edmonton_last30_tem_max = edmonton_last30_tem %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY, Measure, year) %>% group_by(season,CITY,  year) %>% summarise(maximum = max(Measure)) %>% filter(year < 2020)
+
+edmonton_last30_tem_mean  = edmonton_last30_tem %>% mutate(year =as.numeric(format(LOCAL_DATE, "%Y"))) %>% dplyr::select(season, CITY, Measure, year) %>% group_by(season,CITY, year) %>% summarise(mid = mean(Measure)) %>% filter(year < 2020)
+
+edm_winter_temp_min = as_tibble(edmonton_last30_tem_min)  %>% filter(season == "winter")
+edm_winter_temp_max = as_tibble(edmonton_last30_tem_max)  %>% filter(season == "winter")
+edm_winter_temp_mean = as_tibble(edmonton_last30_tem_mean) %>% filter(season == "winter")
+edm_summer_temp_min = as_tibble(edmonton_last30_tem_min)  %>% filter(season == "summer")
+edm_summer_temp_max = as_tibble(edmonton_last30_tem_max)  %>% filter(season == "summer")
+edm_summer_temp_mean = as_tibble(edmonton_last30_tem_mean) %>% filter(season == "summer")
+
+# WINTER Temp
+calgary_winter_mean = calg_winter_temp_mean %>% summarise(mean_season = mean(mid))
+calgary_winter_max = calg_winter_temp_max %>% summarise(max_season = mean(maximum))
+calgary_winter_min = calg_winter_temp_min %>% summarise(min_season = mean(minimum))
+Edmonton_winter_mean = edm_winter_temp_mean %>% summarise(mean_season = mean(mid))
+Edmonton_winter_max = edm_winter_temp_max %>% summarise(max_season = mean(maximum))
+Edmonton_winter_min = edm_winter_temp_min %>% summarise(min_season = mean(minimum))
+
+# SUMMER Temp
+calgary_summer_mean = calg_summer_temp_mean %>% summarise(mean_season = mean(mid))
+calgary_summer_max = calg_summer_temp_max %>% summarise(max_season = mean(maximum))
+calgary_summer_min = calg_summer_temp_min %>% summarise(min_season = mean(minimum))
+Edmonton_summer_mean = edm_summer_temp_mean %>% summarise(mean_season = mean(mid))
+Edmonton_summer_max = edm_summer_temp_max %>% summarise(max_season = mean(maximum))
+Edmonton_summer_min = edm_summer_temp_min %>% summarise(min_season = mean(minimum))
+
+# Table 
+tab = matrix(c(calgary_winter_mean$mean_season, calgary_winter_min$min_season, calgary_winter_max$max_season,Edmonton_winter_mean$mean_season, Edmonton_winter_min$min_season, Edmonton_winter_max$max_season), ncol = 3, byrow = TRUE)
+colnames(tab) = c("Mean Temp", "Coldest Temp", "Hottest Temp")
+rownames(tab) = c("Calgary Winter", "Edmonton Winter")
+tab1 = as.table(tab)
+print(tab1)  
+
+tab2 = matrix(c(calgary_summer_mean$mean_season, calgary_summer_min$min_season, calgary_summer_max$max_season,Edmonton_summer_mean$mean_season, Edmonton_summer_min$min_season, Edmonton_summer_max$max_season), ncol = 3, byrow = TRUE)
+colnames(tab2) = c("Mean Temp", "Coldest Temp", "Hottest Temp")
+rownames(tab2) = c("Calgary Summer", "Edmonton Summer")
+tab3 = as.table(tab2)
+print(tab3)  
+```
+These two tables are designed to showcase in a numerical sense what the two previous plots have showen. For Calgary it is on average 4.23-4.84 degrees Celsius warmer on all aspects (mean, min and max) than Edmonton in the winter months, and in the summer like previously mentioned, the numbers are much closer and show only about 0.31 - 0.98 *C on average difference between the two metropolitans. 
+
+### Do Calgary and Edmonton have similar coldest temperatures?
+Using alpha = 0.05, the following hypotheses were tested:
+
+H0 = Calgary will have a similar coldest temperature in the winter compared to Edmonton (U1 = U2)
+H1 = Calgary will have a warmer coldest temperature in the winter compared to Edmonton (U1 > U2)
+
+```{r}
+calgary = calg_winter_temp_min$minimum
+edmonton = edm_winter_temp_min$minimum
+x1 = mean(calgary)
+x2 = mean(edmonton)
+
+s1 = sd(calgary)
+s2 = sd(edmonton)
+n1 = length(calgary)
+n2 = length(edmonton)
+alpha = 0.05
+z = qnorm(1-alpha)
+bound = (x1 - x2) - z* (sqrt((s1**2/n1)+(s2**2/n2)))
+print(round(bound,4))
+```
+Knowing this value, we reject the H0 hypothesis suggested above and can confirm with at least 95% certainty that Calgary will have a warmer winter temperature when compared with Edmonton. Given that this value is 3.1127, it also indicates that the variation between Calgary and Edmonton is more significant, which is inline with what is seen in the graphs and tables before. 
+
+
+### Do Calgary and Edmonton have similar warmest temperatures?
+H0 = Calgary will have a similar warmest temperature in the summer compared to Edmonton (U1 = U2)
+H1 = Calgary will have a higher warmest temperature in the summer compared to Edmonton (U1 > U2)
+```{r}
+calgary = calg_summer_temp_max$maximum
+edmonton = edm_summer_temp_max$maximum
+x1 = mean(calgary)
+x2 = mean(edmonton)
+
+s1 = sd(calgary)
+s2 = sd(edmonton)
+n1 = length(calgary)
+n2 = length(edmonton)
+alpha = 0.05
+z = qnorm(1- alpha)
+bound = (x1 - x2) - z* (sqrt((s1**2/n1)+(s2**2/n2)))
+print(round(bound,4))
+```
+Given this we reject the H0 hypothesis suggested above and can confirm with at least 95% certainty that Calgary will have a slightly warmer summer when compared to Edmonton. Looking at the value calculated 0.3675, this shows that the difference in the two cities is far closer together in the summer months verses what was seen in the winter, again confirming the conclusions made previously based on the tables and plots. 
+
+## Which city has the greater proportion of days above 0 degrees? (Statistical method: 95% confidence interval (for proportions)) 
+We want to find out which city has more days with a warm temperature (>0 degrees). To do this, we will construct a 90% confidence interval for the proportion of days below 0°C for Calgary vs. the proportion of days below 0°C for Edmonton.
+
+
+H0: p_hat_cal - p_hat_edm = 0 vs. Ha: p_hat_cal - p_hat_edm > 0
+```{r Q3}
+#the last 30 years Temperature data in Calgary will be used to do the test.
+calgary_last30_tem_measure <- calgary_last30_tem$Measure
+edmonton_last30_tem_measure <- edmonton_last30_tem$Measure
+x_cal_warm <- sum(calgary_last30_tem_measure>0)
+n_cal_warm <- length(calgary_last30_tem_measure)
+x_edm_warm <- sum(edmonton_last30_tem_measure>0)
+n_edm_warm <- length(edmonton_last30_tem_measure)
+p_hat_cal <- x_cal_warm/n_cal_warm
+p_hat_edm <- x_edm_warm/n_edm_warm
+alpha = 0.05
+za2 <- qnorm(1-alpha)
+lower_CI <- (p_hat_cal - p_hat_edm) - za2*sqrt(p_hat_cal*(1-p_hat_cal)/n_cal_warm + p_hat_edm*(1-p_hat_edm)/n_edm_warm)
+upper_CI <- (p_hat_cal - p_hat_edm) + za2*sqrt(p_hat_cal*(1-p_hat_cal)/n_cal_warm + p_hat_edm*(1-p_hat_edm)/n_edm_warm)
+
+cat("At 5% level, the confidence interval is between 
+    (", round(lower_CI,4), ",", round(upper_CI,4), "). 
+    Because 0 is not contained inside this small interval, we reject H0. 
+    We can conclude that we are 95% confident that \nCalgary has more warm days compared to Edmonton." )
+```
+
+
+## Is there a correlation for the Temperature between Calgary and Edmonton? (Statistical method: Linear regression)
+Since Calgary and Edmonton are geographically close to each other, they are theoretically quite correlated in terms of weather. As such, we want to explore the strength of this association to see if data in one location can be used to to predict the other.
+
+```{r Linear_Regression}
+#Make a scatter plot and add the fitted regression line to the plot
+Canadian_climate_history_wide_Cal_Edm_last_30_noNa_tem <- Canadian_climate_history_long_Cal_Edm_last_30_noNa %>% filter(VARIABLE == "MEAN_TEMPERATURE") %>%  dcast(LOCAL_DATE+season+VARIABLE~CITY)
+pairs.panels(Canadian_climate_history_wide_Cal_Edm_last_30_noNa_tem %>% dplyr::select(CALGARY, EDMONTON))
+
+```
+
+```{r}
+#Assess statistically the adequacy of the fit of the linear model using appropriate statistics and model diagnostics.
+#Use EDMONTON to predict CALGARY
+cal_edm_tem_fit <- lm(CALGARY~EDMONTON, data = Canadian_climate_history_wide_Cal_Edm_last_30_noNa_tem)
+summary(cal_edm_tem_fit)
+par(mfrow=c(2,2))
+par(mar = c(3,4,3,2.1))
+plot(cal_edm_tem_fit)
+```
+
+From the linear regression, we can see that the overall F test has a Pvalue < 2e-16. The individual t tests (Pvalue for Intercept is <2e-16, Pvalue for slope is <2e-16) all suggest that the fitted model is highy statistically significant. The coefficient of determination is $R^2 = 0.933$.
+
+From the model dignostics, we don't see anything abnormal. Both Residuals vs Fitted and Scale-Location show linearity and equal variance assumptions are met because the points are evenly distributed in the rectangular region. The qqplot shows a near 45 degree line indicating a good normality assumption. There are only a few influential data points. Since we have a good R2, there is no need to re-test the model without these influential data points.
+
+We highly recommend using this model for predicting Calgary Temperature using Edmonton Temperature since the slope is highly statistically significant. The R2 is  also above 0.9, which indicates a good linear regression. All the assumptions are also met from the model diagnostics.
+
+
+## Does Calgary have the same temperature as Edmonton year-round? (Statistical method: 95% confidence interval (two-sample two-tail test bootstrap))
+
+
+To answer this question, we will construct a 95% confidence interval by creating the bootstrap distribution for mean_calgary_temp- mean_edmonton_temp. Let u1 and u2 to be the mean temperature for Calgary and Edmonton respectively. We are testing H0: u1 - u2 = 0 vs. u1 - u2 != 0. This is a two-sample two tail test. We reject H0 if 0 is contained within the confidence interval.
+```{r bootstrap}
+#We use boot to do the hypothesis test.
+tem_diff <- function(d,i){
+  d2 = d[i,]
+  return(mean(d2$CALGARY, na.rm = T) - mean(d2$EDMONTON, na.rm = T))
+}
+set.seed(2021)
+boot_tem_cal_edm <- boot(data = Canadian_climate_history_wide_Cal_Edm_last_30_noNa_tem, statistic = tem_diff, R = 2000)
+boot.ci(boot_tem_cal_edm, conf = 0.95, type = "perc") #NOTE you cannot use bca interval because the sample size is too big for R=2000
+```
+
+At 95% confidence level, the percentile interval is ( 2.04,  2.19 ). Because u1-u2=0 is not contained inside this 95% CI , we reject H0. As such, we conclude that we are 95% confident that Calgary on average has a different temperature than Edmonton all year round.
+
+```{r}
+hist(boot_tem_cal_edm$t, nclass = 40, probability = T, xlab = "Mean Calgary Temperature - Mean Edmonton Temperature",
+     ylab = "Probability", main = "Histogram of Bootstrap of 
+     mean temperature difference for Calgary vs. Edmonton")
+lines(density(boot_tem_cal_edm$t)) #add the density line
+text(2.04, 3, col="red", 2.04) #I am ploting the perc interval 
+text(2.19, 3, col="red", 2.19)
+lines(c(2.04,2.04), c(0,2), col="red")
+lines(c(2.19,2.19), c(0,2), col="red")
+```
+
+
+## Do Calgary and Edmonton see the same variance in temperature/precipitation? (Statistical method: Hypothesis testing (test of equal variances using F-test))
+
+This is to test the hypothesis of equal variances between Calgary and Edmonton for temperature/precipitation
+
+-- Null hypothesis (**H~0~**) = $\sigma${calgary, temp}^2 = $\sigma${edmonton, temp}^2
+
+
+-- Alternative hypothesis (**H~A~**) = $\sigma${calgary, temp}^2 $\neq$ $\sigma${edmonton, temp}^2
+
+```{r message=FALSE}
+city_stats <- Canadian_climate_history_long_Cal_Edm_last_30_noNa %>% mutate(year = format(LOCAL_DATE, "%Y")) %>% group_by(CITY, VARIABLE) %>% summarise(mean_city_val = mean(Measure), sd_city_val = sd(Measure), n_city_val = length(Measure))
+# for temperature
+calg_temp_stats = as_tibble(city_stats) %>% filter(CITY == "CALGARY") %>% filter(VARIABLE == "MEAN_TEMPERATURE" )
+edm_temp_stats = as_tibble(city_stats) %>% filter(CITY == "EDMONTON") %>% filter(VARIABLE == "MEAN_TEMPERATURE" )
+
+# define parameters for both cities
+calg_temp_mean = calg_temp_stats$mean_city_val
+calg_temp_s = calg_temp_stats$sd_city_val
+calg_temp_n = calg_temp_stats$n_city_val
+edm_temp_mean = edm_temp_stats$mean_city_val
+edm_temp_s = edm_temp_stats$sd_city_val
+edm_temp_n = edm_temp_stats$n_city_val
+
+# find F
+F_temp = calg_temp_s^2/edm_temp_s^2
+alpha = 0.05
+df_calg = calg_temp_n - 1
+df_edm = edm_temp_n - 1
+
+# find critical value range
+F_alpha_temp = qf(1-alpha/2, df_calg, df_edm)
+F_1minusalpha_temp = qf(alpha/2, df_calg, df_edm)
+
+cat("Since F (", round(F_temp,4), ") is not within the critcal value range 
+    (", round(F_1minusalpha_temp,4), ",", round(F_alpha_temp,4), ") we reject H0 at alpha = 0.05. 
+    We are 95% confident that the true sigma_calg,temp does not equal the true sigma_edm,temp.")
+```
+
+Since F (0.7729) is not within the critical value range ( 1.039, 0.9624), we reject H0 at alpha = 0.05. We are 95% confident that the true $\sigma${calgary, temp}^2 $\neq$ $\sigma${edmonton, temp}^2. 
+
+For precipitation:
+
+-- Null hypothesis (**H~0~**) = $\sigma${calgary, precipitation}^2 = $\sigma${edmonton, precipitation}^2
+
+
+-- Alternative hypothesis (**H~A~**) = $\sigma${calgary, precipitation}^2 $\neq$ $\sigma${edmonton, precipitation}^2
+
+
+```{r}
+# for precipitation
+calg_precip_stats = as_tibble(city_stats) %>% filter(CITY == "CALGARY") %>% filter(VARIABLE == "TOTAL_PRECIPITATION" )
+edm_precip_stats = as_tibble(city_stats) %>% filter(CITY == "EDMONTON") %>% filter(VARIABLE == "TOTAL_PRECIPITATION" )
+
+# define parameters for both cities
+calg_precip_mean = calg_precip_stats$mean_city_val
+calg_precip_s = calg_precip_stats$sd_city_val
+calg_precip_n = calg_precip_stats$n_city_val
+edm_precip_mean = edm_precip_stats$mean_city_val
+edm_precip_s = edm_precip_stats$sd_city_val
+edm_precip_n = edm_precip_stats$n_city_val
+
+# find F
+F_precip= calg_precip_s^2/edm_precip_s^2
+alpha = 0.05
+df_calg_precip = calg_precip_n - 1
+df_edm_precip = edm_precip_n - 1
+
+# find critical value range
+F_alpha_precip = qf(1-alpha/2, df_calg_precip, df_edm_precip)
+F_1minusalpha_precip = qf(alpha/2, df_calg_precip, df_edm_precip)
+
+cat("Since F (", round(F_precip,4), ") is not within the critcal value range 
+    (", round(F_1minusalpha_precip,4), ",", round(F_alpha_precip,4), ") we reject H0 at alpha = 0.05. 
+    We are 95% confident that the true sigma_calg, precip does not \n equal to the true sigma_edm,precip")
+```
