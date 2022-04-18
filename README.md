@@ -13,4 +13,25 @@ There are several reasons to investigate the weather change in Calgary vs. Edmon
 - Box plot to show the spread of each city’s temperature and precipitation • Scatter plot to explore nature of the relationship between variables
 - Histogram to show underlying distribution
 - Barplot to show the values in the categorical variable
-- 
+
+#### To answer Question 1, the following visualizations and statistical methods were used:
+- Calculated table and scatter plot difference to show the the temperature/precipitation change overtime
+- Linear Regression Model for Calgary & Edmonton temperature change over time
+#### To answer Question 2, the following visualizations and statistical methods were used:
+- 95% confidence interval for Calgary’s mean temperature and precipitation (estimation of one population mean)
+- 95% confidence interval for Calgary’s mean precipitation (bootstrap)
+- Bar plot to compare the mean value of cities
+- P-value test for Calgary’s true mean temperature in its hottest and coldest months (estimation of
+one population mean)
+- 95% confidence interval for mean number of days in a year that are below -20 degrees and above
++20 degrees each year
+#### To answer Question 3, the following visualizations and statistical methods were used:
+- Line plots to show the min and max temperatures for each city during summer and winter
+- Simple linear regression to determine if there is a correlation between each city’s mean temperature • Pairwise plot to show temperature association between cities
+- qqplot to check normality assumption for linear regression model
+- Hypothesis testing:
+  – To determine which city will have a colder winter or warmer summer (two-sample mean test (mean_coldest_calgary - mean_coldest_edmonton) or (mean_hottest_calgary - mean_hottest_edmonton) )
+  – To determine which city has a higher proportion of days above 0 degrees (two sample population p1-p2 test)
+  – To determine if there is a difference between each city’s mean temperature (estimation of two population difference (mean_calgary - mean_edmonton))
+  – To determine if each city’s variance in precipitation and temperature is equal (test of equal variances)
+
