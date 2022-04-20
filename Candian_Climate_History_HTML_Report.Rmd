@@ -1,18 +1,8 @@
 ---
-title: "Calgary & Edmonton Weather Comparison"
-subtitle: 'DATA 602 Final Project'
-date: '`r format(Sys.time(), '%Y-%m-%d')`'
-output:
-  pdf_document:
-    extra_dependencies:
-    - bbm
-    - xcolor
-    toc: yes
-  html_document:
-    toc: yes
-    df_print: paged
-geometry: margin=3cm
-header-includes: \usepackage{fvextra} \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+title: "Candian_Climate_History_HTML_Report"
+author: "Yongpeng Fu"
+date: "19/04/2022"
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
